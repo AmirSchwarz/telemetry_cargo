@@ -12,7 +12,7 @@ pub use config::Config;
 pub use telemetry_privacy::Consent;
 pub use telemetry_queue::QueueConfig;
 pub use telemetry_schema::{Category, Event, EventDefinition, Limits, Properties, PropertyRule};
-pub use telemetry_transport::{Transport, TransportError};
+pub use telemetry_transport::{DeliveryReport, ExportProtocol, Transport, TransportError};
 
 use lifecycle::Lifecycle;
 use serde::{Deserialize, Serialize};
@@ -53,9 +53,7 @@ impl fmt::Display for Error {
             Self::DeadlineExceeded => {
                 f.write_str("telemetry deadline exceeded; pending events retained")
             }
-            Self::Transport { .. } => {
-                f.write_str("telemetry export failed; pending events retained")
-            }
+            Self::Transport { .. } => f.write_str("telemetry export failed"),
             Self::NoTransport => f.write_str("no exporter configured; pending events retained"),
             Self::Capacity => f.write_str("telemetry state limit reached"),
             Self::Poisoned => f.write_str("telemetry state is unavailable"),
@@ -129,7 +127,7 @@ struct State {
     retry_at: Instant,
     failures: u32,
     send_attempt: u64,
-    last_send_error: Option<bool>,
+    last_permanent_error_attempt: u64,
 }
 
 impl Clone for Telemetry {
@@ -297,13 +295,27 @@ impl Telemetry {
         let transport: Option<Arc<dyn Transport>> = if let Some(endpoint) = &config.endpoint {
             #[cfg(feature = "http")]
             {
-                Some(Arc::new(
-                    telemetry_transport::HttpTransport::new(
-                        endpoint,
-                        config.ingestion_token.clone(),
-                    )
-                    .map_err(|_| Error::InvalidConfig("invalid HTTPS exporter configuration"))?,
-                ))
+                let transport: Arc<dyn Transport> = match config.export_protocol {
+                    ExportProtocol::OtlpHttpJson => Arc::new(
+                        telemetry_transport::OtlpHttpTransport::new(
+                            endpoint,
+                            config.ingestion_token.clone(),
+                            config.otlp_headers.clone(),
+                            config.allow_insecure_loopback,
+                        )
+                        .map_err(|_| Error::InvalidConfig("invalid OTLP exporter configuration"))?,
+                    ),
+                    ExportProtocol::LegacyJson => Arc::new(
+                        telemetry_transport::HttpTransport::new(
+                            endpoint,
+                            config.ingestion_token.clone(),
+                        )
+                        .map_err(|_| {
+                            Error::InvalidConfig("invalid HTTPS exporter configuration")
+                        })?,
+                    ),
+                };
+                Some(transport)
             }
             #[cfg(not(feature = "http"))]
             {
@@ -321,6 +333,13 @@ impl Telemetry {
     }
 
     fn build(mut config: Config, transport: Option<Arc<dyn Transport>>) -> Result<Self, Error> {
+        if config.export_protocol == ExportProtocol::LegacyJson
+            && (!config.otlp_headers.is_empty() || config.allow_insecure_loopback)
+        {
+            return Err(Error::InvalidConfig(
+                "OTLP options cannot be used with the legacy exporter",
+            ));
+        }
         validate_id(&config.app_id)
             .map_err(|_| Error::InvalidConfig("app_id must be a semantic identifier"))?;
         if config.app_version.is_empty() || config.app_version.len() > 128 {
@@ -383,6 +402,7 @@ impl Telemetry {
         let session_enabled = gate.enabled(Category::UsageSession);
         // Tokens and local filesystem locations are needed only during initialization.
         config.ingestion_token = None;
+        config.otlp_headers.clear();
         config.sqlite_path = None;
         let now = Instant::now();
         let interval = Duration::from_millis(config.flush_interval_ms);
@@ -411,7 +431,7 @@ impl Telemetry {
                 retry_at: now,
                 failures: 0,
                 send_attempt: 0,
-                last_send_error: None,
+                last_permanent_error_attempt: 0,
             }),
             changed: Condvar::new(),
             upload_gate: Mutex::new(()),
@@ -762,14 +782,14 @@ impl Telemetry {
         );
         self.inner.changed.notify_all();
         loop {
+            if state.last_permanent_error_attempt > initial_attempt {
+                return Err(Error::Transport { retryable: false });
+            }
             if state.queue.is_empty() {
                 return Ok(());
             }
             if state.stopped {
                 return Err(Error::Closed);
-            }
-            if state.send_attempt > initial_attempt && state.last_send_error == Some(false) {
-                return Err(Error::Transport { retryable: false });
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
@@ -826,6 +846,10 @@ impl Telemetry {
             "memory_queue": true,
             "sqlite": cfg!(feature = "sqlite"),
             "http": cfg!(feature = "http"),
+            "otlp_http_json": cfg!(feature = "http"),
+            "legacy_json": cfg!(feature = "http"),
+            "distributed_trace_context": false,
+            "export_protocol": self.state().map(|state| state.config.export_protocol).unwrap_or_default(),
             "configured_transport": self.inner.transport.is_some(),
             "normalized_lifecycle": true,
             "automatic_platform_lifecycle": false,

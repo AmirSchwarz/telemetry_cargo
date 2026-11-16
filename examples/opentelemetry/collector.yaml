@@ -1,0 +1,28 @@
+# Local interoperability test receiver. Docker publishes this port on loopback.
+# Production deployments must configure their own TLS, authentication and storage.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  file:
+    path: /output/telemetry.json
+    format: json
+    flush_interval: 100ms
+
+service:
+  telemetry:
+    logs:
+      level: error
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [file]
+    metrics:
+      receivers: [otlp]
+      exporters: [file]
+    traces:
+      receivers: [otlp]
+      exporters: [file]

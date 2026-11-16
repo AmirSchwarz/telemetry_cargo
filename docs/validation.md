@@ -13,7 +13,7 @@ Validated on Linux x86_64. The SDK is source-built and unpublished. This evidenc
 | TypeScript declarations | `tsc --noEmit --strict --lib ES2022,DOM --module nodenext --moduleResolution nodenext packages/js/index.d.ts packages/js/browser.d.ts` | Passed using an existing TypeScript 5.5.3 installation. No new npm dependency was added. |
 | Schema package | `cargo package -p telemetry-schema --offline --allow-dirty` | Passed, including compilation of the extracted crate. Other packages remain unpublished source distributions. |
 
-The Rust workspace run passed 60 unit/integration tests and one documentation compilation test. The memory-only facade run separately passed five integration tests and its documentation test. The primary test compiler was Rust 1.102.0-nightly; the stable check above was additional verification.
+The current Rust workspace run passed 92 unit/integration tests and one documentation compilation test, including OTLP encoding, partial delivery, retries and shared ProtoJSON response parsing. The memory-only facade run separately passed five integration tests and its documentation test. The primary test compiler was Rust 1.102.0-nightly; the stable check above was additional verification.
 
 Native script environment on this host:
 
@@ -27,5 +27,15 @@ bash scripts/check-bindings.sh
 Go was 1.26.3, Dart 3.10.4 and Python 3.12.3. Local socket tests required sandbox escalation: unrestricted runs passed after restricted runs failed with `Operation not permitted` while binding loopback sockets. No test was skipped to obtain the passing results.
 
 Reviews found and verified fixes for persisted diagnostic session linkage, browser configuration mutation during initialization, independent browser flush deadlines, Go close deadlines behind active uploads, Python cleanup masking application exceptions, and collection after JavaScript shutdown starts. These checks do not establish a production security certification.
+
+## OTLP and ClickStack integration
+
+`bash scripts/check-otlp-collector.sh` passed against the official `otel/opentelemetry-collector-contrib:0.165.0` image. The SDK used its default OTLP/HTTP JSON exporter through the actual C ABI. The collector accepted **8 logs, 2 metric points and 1 span** on its standard OTLP endpoints and wrote all three signals through its file exporter. Assertions verified service identity, ERROR severity and redaction, signed delta metrics without unique labels, span IDs and durations, default-denied collection and consent withdrawal. The runner stops its temporary container and retains synthetic output under ignored `target/otlp-collector/`.
+
+The final `scripts/check.sh`, stable workspace check and rebuilt `scripts/check-bindings.sh` passed after the response-parser correction. Native and browser exports now share exact ProtoJSON count decoding, including integral decimal/exponent forms and null-as-unset, with fractional underflow and rounding regressions. An independent two-record C-ABI fixture verified that legal partial-rejection representations report exactly one dropped record, rather than dropping the entire request.
+
+The actual generated-WASM smoke passed with mocked OTLP responses, covering all three signals, no replay of accepted signals, raw ClickStack authorization, partial rejection, response limits, deadlines and consent changes between requests. TypeScript declarations passed strict checking. This remains a Node-hosted WASM check rather than a DOM/browser run. No new external runtime dependency was added; the existing Serde JSON dependency enables its `raw_value` feature for exact response parsing.
+
+ClickStack's raw authorization header was verified in native HTTP and browser fixtures. Collector ingestion compatibility was established; a production ClickStack/ClickHouse database and UI were not deployed or tested. See [OpenTelemetry and ClickStack setup](opentelemetry.md).
 
 Not established: other operating systems or architectures; Android/iOS application packaging; real browser/DOM behavior; Python wheel installation; signed or published releases; production gateway/database/dashboard/MCP E2E; native crash recovery; encrypted persistence; browser IndexedDB. See [the support matrix](support-matrix.md).

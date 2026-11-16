@@ -6,7 +6,7 @@ Every category defaults to disabled: `essential_operations`, `diagnostics`, `per
 
 The Rust engine checks permission before collection, retained session state, queue persistence and upload. Disabled collection succeeds without retaining the event. An empty workflow ID means workflow collection was disabled.
 
-Withdrawing consent purges queued events in that category. Withdrawing session consent also clears screen, workflow and lifecycle state. Granting it again starts a new random session. Withdrawal synchronizes with export; it cannot retract requests already sent or remove data already received by a server. Server retention and deletion must be implemented by the gateway operator.
+Withdrawing consent purges queued events in that category. Withdrawing session consent also clears screen, workflow and lifecycle state. Granting it again starts a new random session. Withdrawal synchronizes with export; it cannot retract requests already sent or remove data already received by a server. Server retention and deletion must be implemented by the collector/backend operator.
 
 Consent withdrawal, flush and shutdown may wait for exporter work. Collection never performs a network request on the calling thread, but native SQLite initialization and collection perform synchronous local disk I/O and can wait for locks. Rust, Python and Go applications should schedule that work outside a UI thread. Releasing Python's GIL does not make its calling thread asynchronous. Node dispatches initialization and all public methods through asynchronous N-API tasks; Dart uses a dedicated isolate.
 
@@ -34,8 +34,14 @@ The browser subset currently uses memory storage; IndexedDB persistence is not i
 
 ## Transport and backend responsibilities
 
-The HTTP transport accepts the full `https://…/v1/telemetry/batches` endpoint, rejects URL credentials, query strings and fragments, and does not follow redirects. Only 2xx responses acknowledge a batch. Retryable failures keep events queued; delivery may repeat, so the gateway must deduplicate by event ID. `Retry-After` supports delta-seconds; HTTP-date parsing is not implemented.
+The default OTLP/HTTP JSON exporter accepts a collector base URL and appends standard signal paths. It rejects URL credentials, query strings and fragments, and does not follow redirects. HTTPS is required unless `allow_insecure_loopback: true` is explicitly selected for literal `127.0.0.1` or `::1`. That exception is for local testing; it does not permit plaintext requests to arbitrary hosts.
 
-Use public per-app ingestion tokens, never administration credentials. Transport errors omit tokens and response bodies. This does not control reverse-proxy access logs or prevent servers from seeing source IP addresses.
+Only a valid HTTP 200 OTLP response acknowledges delivery. Partial rejection is counted, reported and not retried. Completed signal requests are removed independently; transient failures retain uncompleted events. Response parsing is bounded, and error messages never echo server response text. `Retry-After` supports delta-seconds and IMF-fixdate. Delivery can still repeat after an ambiguous connection failure; an OTLP receiver does not automatically deduplicate this SDK's event IDs.
 
-The gateway still needs payload validation, authentication, rate limits, quotas, replay protection, retention and deletion controls. The SDK does not deploy those services, perform a legal assessment, encrypt SQLite, install fatal-signal handlers or collect minidumps. Consult the original design for those separate requirements.
+The exporter adds app/service metadata and the existing allowed properties. It does not add machine, device or user identifiers. Metric datapoints do not include random event, session or workflow IDs as labels. Log attributes retain event IDs; permitted session/workflow identifiers remain restricted to session-category events. Standalone trace IDs are derived from random event IDs. These identifiers are not a claim of anonymity.
+
+Use public per-app ingestion tokens or keys, never administration credentials. `ingestion_token` sends Bearer authentication; ClickStack can use its required raw `authorization` header through `otlp_headers`. Header values are sensitive configuration: they are bounded, removed from retained core configuration after initialization, and omitted from Debug/errors. Do not combine both authorization forms. See [authentication examples](opentelemetry.md#clickstack-authentication).
+
+The explicit `legacy_json` protocol retains the previous custom `/v1/telemetry/batches` API and whole-batch acknowledgment behavior. It is not a standard collector endpoint.
+
+The collector/backend still needs authentication, validation, rate limits, quotas, retention and deletion controls. The SDK does not control reverse-proxy access logs or prevent servers from seeing source IP addresses. It does not deploy those services, perform a legal assessment, encrypt SQLite, install fatal-signal handlers or collect minidumps. Consult the original design for those separate requirements.

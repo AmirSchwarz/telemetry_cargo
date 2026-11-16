@@ -1,7 +1,10 @@
-import type { ActionResult, Capabilities, Category, Diagnostics, EventDefinition, Limits, QueueConfig } from './index.js';
+import type { ActionResult, Capabilities, Category, Diagnostics, EventDefinition, ExportProtocol, Limits, QueueConfig } from './index.js';
 export interface BrowserConfig {
   app_id: string; app_version: string;
   endpoint?: string | null; ingestion_token?: string | null;
+  export_protocol?: ExportProtocol;
+  otlp_headers?: Record<string, string>;
+  allow_insecure_loopback?: boolean;
   consent?: Partial<Record<Category, boolean>>;
   essential_operations_reviewed?: boolean;
   queue?: QueueConfig; limits?: Limits;

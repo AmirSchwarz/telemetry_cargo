@@ -39,6 +39,14 @@ const (
 	Timeout           WorkflowOutcome = "timeout"
 )
 
+// ExportProtocol selects the collector wire format. The empty value defaults to OTLP.
+type ExportProtocol string
+
+const (
+	OTLPHTTPJSON ExportProtocol = "otlp_http_json"
+	LegacyJSON   ExportProtocol = "legacy_json"
+)
+
 // Config uses the same JSON contract as Rust. Omitted consent categories are off.
 // Native queue persistence is opt-in and is not encrypted by SQLite itself.
 type Config struct {
@@ -46,6 +54,9 @@ type Config struct {
 	AppVersion                  string            `json:"app_version"`
 	Endpoint                    string            `json:"endpoint,omitempty"`
 	IngestionToken              string            `json:"ingestion_token,omitempty"`
+	ExportProtocol              ExportProtocol    `json:"export_protocol,omitempty"`
+	OTLPHeaders                 map[string]string `json:"otlp_headers,omitempty"`
+	AllowInsecureLoopback       bool              `json:"allow_insecure_loopback,omitempty"`
 	Consent                     map[Category]bool `json:"consent,omitempty"`
 	EssentialOperationsReviewed bool              `json:"essential_operations_reviewed,omitempty"`
 	SQLitePath                  string            `json:"sqlite_path,omitempty"`

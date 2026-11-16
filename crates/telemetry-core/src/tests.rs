@@ -348,10 +348,231 @@ fn config_debug_never_exposes_token_or_storage_path() {
     let mut config = config();
     config.ingestion_token = Some("VERY_SECRET_TOKEN".to_owned());
     config.sqlite_path = Some("/home/private/location".to_owned());
+    config.otlp_headers.insert(
+        "authorization".to_owned(),
+        "VERY_SECRET_CLICKSTACK_KEY".to_owned(),
+    );
     let debug = format!("{config:?}");
     assert!(!debug.contains("VERY_SECRET_TOKEN"));
     assert!(!debug.contains("/home/private/location"));
+    assert!(!debug.contains("VERY_SECRET_CLICKSTACK_KEY"));
+    assert!(!debug.contains("authorization"));
     assert!(debug.contains("[redacted]"));
+}
+
+#[test]
+fn otlp_is_default_and_configuration_round_trips() {
+    let default = config();
+    assert_eq!(default.export_protocol, ExportProtocol::OtlpHttpJson);
+    assert!(!default.allow_insecure_loopback);
+    assert!(default.otlp_headers.is_empty());
+    let parsed: Config = serde_json::from_value(json!({
+        "app_id":"example.app", "app_version":"1.0",
+        "export_protocol":"otlp_http_json", "allow_insecure_loopback":true,
+        "otlp_headers":{"authorization":"public-test-ingestion-key"}
+    }))
+    .unwrap();
+    assert_eq!(parsed.export_protocol, ExportProtocol::OtlpHttpJson);
+    assert!(parsed.allow_insecure_loopback);
+    assert_eq!(
+        parsed.otlp_headers["authorization"],
+        "public-test-ingestion-key"
+    );
+    let encoded = serde_json::to_value(parsed).unwrap();
+    assert_eq!(encoded["export_protocol"], "otlp_http_json");
+    assert!(serde_json::from_value::<Config>(json!({"export_protocol":"otlp_grpc"})).is_err());
+}
+
+#[test]
+fn legacy_protocol_is_explicit_and_rejects_otlp_options() {
+    let mut legacy = config();
+    legacy.export_protocol = ExportProtocol::LegacyJson;
+    let encoded = serde_json::to_value(&legacy).unwrap();
+    assert_eq!(encoded["export_protocol"], "legacy_json");
+    Telemetry::init(legacy.clone()).unwrap();
+    legacy.allow_insecure_loopback = true;
+    assert!(matches!(
+        Telemetry::init(legacy.clone()),
+        Err(Error::InvalidConfig(_))
+    ));
+    legacy.allow_insecure_loopback = false;
+    legacy
+        .otlp_headers
+        .insert("authorization".to_owned(), "public-test-key".to_owned());
+    assert!(matches!(
+        Telemetry::init(legacy),
+        Err(Error::InvalidConfig(_))
+    ));
+}
+
+#[cfg(feature = "http")]
+#[test]
+fn configured_exporters_select_protocol_and_discard_header_secrets() {
+    let mut otlp = config();
+    otlp.endpoint = Some("https://collector.example.com".to_owned());
+    otlp.otlp_headers
+        .insert("authorization".to_owned(), "public-test-key".to_owned());
+    let sdk = Telemetry::init(otlp).unwrap();
+    assert!(sdk.state().unwrap().config.otlp_headers.is_empty());
+    assert_eq!(sdk.capabilities()["export_protocol"], "otlp_http_json");
+    assert_eq!(sdk.capabilities()["otlp_http_json"], true);
+    let mut legacy = config();
+    legacy.endpoint = Some("https://collector.example.com/v1/telemetry/batches".to_owned());
+    legacy.export_protocol = ExportProtocol::LegacyJson;
+    let sdk = Telemetry::init(legacy).unwrap();
+    assert_eq!(sdk.capabilities()["export_protocol"], "legacy_json");
+}
+
+struct PartialDeliveryTransport {
+    batches: Mutex<Vec<Vec<String>>>,
+}
+
+impl Transport for PartialDeliveryTransport {
+    fn send(&self, _: &[Event], _: Duration) -> Result<(), TransportError> {
+        panic!("the worker must use send_report")
+    }
+
+    fn send_report(&self, events: &[Event], _: Duration) -> DeliveryReport {
+        let mut batches = self.batches.lock().unwrap();
+        batches.push(events.iter().map(|event| event.event_id.clone()).collect());
+        if batches.len() == 1 {
+            DeliveryReport {
+                consumed: vec![events[0].event_id.clone()],
+                rejected: 0,
+                error: Some(TransportError {
+                    message: "later signal temporarily unavailable".to_owned(),
+                    retryable: true,
+                    retry_after: None,
+                }),
+            }
+        } else {
+            DeliveryReport {
+                consumed: events.iter().map(|event| event.event_id.clone()).collect(),
+                ..DeliveryReport::default()
+            }
+        }
+    }
+}
+
+#[test]
+fn successful_signal_is_not_replayed_after_a_later_signal_fails() {
+    let transport = Arc::new(PartialDeliveryTransport {
+        batches: Mutex::new(Vec::new()),
+    });
+    let sdk = Telemetry::with_transport(enabled_config(), transport.clone()).unwrap();
+    sdk.action("first", ActionResult::Success).unwrap();
+    sdk.increment("second", 1.0).unwrap();
+    assert_eq!(
+        sdk.flush(Duration::from_millis(30)),
+        Err(Error::DeadlineExceeded)
+    );
+    assert_eq!(sdk.diagnostics().queue_depth, 1);
+    assert_eq!(sdk.diagnostics().dropped, 0);
+    // Advance retry eligibility rather than sleeping through production backoff.
+    sdk.state().unwrap().retry_at = Instant::now();
+    sdk.flush(Duration::from_secs(1)).unwrap();
+    let batches = transport.batches.lock().unwrap();
+    assert_eq!(batches.len(), 2);
+    assert_eq!(batches[0].len(), 2);
+    assert_eq!(batches[1], vec![batches[0][1].clone()]);
+    assert_eq!(sdk.diagnostics().queue_depth, 0);
+}
+
+struct RejectedDeliveryTransport {
+    calls: AtomicUsize,
+}
+
+impl Transport for RejectedDeliveryTransport {
+    fn send(&self, _: &[Event], _: Duration) -> Result<(), TransportError> {
+        panic!("the worker must use send_report")
+    }
+
+    fn send_report(&self, events: &[Event], _: Duration) -> DeliveryReport {
+        let first = self.calls.fetch_add(1, Ordering::SeqCst) == 0;
+        DeliveryReport {
+            consumed: events.iter().map(|event| event.event_id.clone()).collect(),
+            rejected: usize::from(first),
+            // A transport cannot suppress rejection by omitting the error.
+            error: None,
+        }
+    }
+}
+
+#[test]
+fn partial_rejection_is_consumed_without_replay_but_flush_reports_failure() {
+    let transport = Arc::new(RejectedDeliveryTransport {
+        calls: AtomicUsize::new(0),
+    });
+    let sdk = Telemetry::with_transport(enabled_config(), transport.clone()).unwrap();
+    sdk.action("first", ActionResult::Success).unwrap();
+    sdk.increment("second", 1.0).unwrap();
+    assert_eq!(
+        sdk.flush(Duration::from_secs(1)),
+        Err(Error::Transport { retryable: false })
+    );
+    assert_eq!(sdk.diagnostics().queue_depth, 0);
+    assert_eq!(sdk.diagnostics().dropped, 1);
+    assert_eq!(sdk.diagnostics().exporter_failures, 1);
+    sdk.flush(Duration::ZERO).unwrap();
+    assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
+    sdk.action("unrelated", ActionResult::Success).unwrap();
+    sdk.flush(Duration::from_millis(100)).unwrap();
+    assert_eq!(transport.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(sdk.diagnostics().queue_depth, 0);
+    // Successful later flushes must not erase rejection history before an
+    // earlier concurrent flush waiter has had a chance to observe it.
+    assert_eq!(sdk.state().unwrap().last_permanent_error_attempt, 1);
+    assert_eq!(sdk.state().unwrap().send_attempt, 2);
+}
+
+struct InvalidDeliveryTransport {
+    mode: u8,
+    calls: AtomicUsize,
+}
+
+impl Transport for InvalidDeliveryTransport {
+    fn send(&self, _: &[Event], _: Duration) -> Result<(), TransportError> {
+        panic!("the worker must use send_report")
+    }
+
+    fn send_report(&self, events: &[Event], _: Duration) -> DeliveryReport {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        match self.mode {
+            0 => DeliveryReport {
+                consumed: vec!["unrelated-record".to_owned()],
+                ..DeliveryReport::default()
+            },
+            1 => DeliveryReport {
+                consumed: vec![events[0].event_id.clone(); 2],
+                ..DeliveryReport::default()
+            },
+            2 => DeliveryReport {
+                consumed: vec![events[0].event_id.clone()],
+                rejected: 2,
+                error: None,
+            },
+            _ => DeliveryReport::default(),
+        }
+    }
+}
+
+#[test]
+fn malformed_delivery_reports_cannot_remove_rows_or_spin_the_exporter() {
+    for mode in 0..4 {
+        let transport = Arc::new(InvalidDeliveryTransport {
+            mode,
+            calls: AtomicUsize::new(0),
+        });
+        let sdk = Telemetry::with_transport(enabled_config(), transport.clone()).unwrap();
+        sdk.action("kept", ActionResult::Success).unwrap();
+        assert_eq!(
+            sdk.flush(Duration::from_secs(1)),
+            Err(Error::Transport { retryable: false })
+        );
+        assert_eq!(sdk.diagnostics().queue_depth, 1);
+        assert_eq!(sdk.diagnostics().dropped, 0);
+        assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
+    }
 }
 
 #[cfg(feature = "sqlite")]

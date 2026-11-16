@@ -110,7 +110,7 @@ func TestCloseDeadlineDoesNotWaitForConcurrentFlush(t *testing.T) {
 	}()
 	sdk, err := New(Config{
 		AppID: "go.close.deadline", AppVersion: "1.0",
-		Endpoint: "https://" + listener.Addr().String() + "/v1/telemetry/batches",
+		Endpoint: "https://" + listener.Addr().String(),
 		Consent:  map[Category]bool{UsageAggregate: true},
 		// Prevent an automatic export: the accepted connection proves Flush
 		// has entered the native exporter before Close is called.

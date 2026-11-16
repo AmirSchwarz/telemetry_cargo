@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 telemetry-schema = { path = "../telemetry-schema" }
 telemetry-privacy = { path = "../telemetry-privacy" }
 telemetry-queue = { path = "../telemetry-queue", default-features = false }
+telemetry-transport.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true

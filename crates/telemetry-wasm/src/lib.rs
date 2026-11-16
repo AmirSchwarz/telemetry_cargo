@@ -78,6 +78,25 @@ impl WasmTelemetry {
         let result = self.execute(command, now_ms)?;
         serde_json::to_string(&result).map_err(|_| failure())
     }
+
+    /// Validate bounded OTLP responses through the same exact ProtoJSON parser
+    /// as native transport. Passing text directly avoids command JSON escaping
+    /// overhead and JavaScript numeric precision loss.
+    pub fn response_rejected(
+        &self,
+        signal: &str,
+        body: &str,
+        submitted: usize,
+    ) -> Result<usize, JsValue> {
+        let signal = match signal {
+            "logs" => telemetry_transport::OtlpSignal::Logs,
+            "metrics" => telemetry_transport::OtlpSignal::Metrics,
+            "traces" => telemetry_transport::OtlpSignal::Traces,
+            _ => return Err(failure()),
+        };
+        telemetry_transport::parse_otlp_response(body.as_bytes(), signal, submitted)
+            .map_err(|_| failure())
+    }
 }
 
 impl WasmTelemetry {
@@ -171,11 +190,24 @@ impl WasmTelemetry {
                     json!({"schema_version":1,"events":self.queue.batch(limit,now_ms).map_err(|_| failure())?}),
                 );
             }
-            Command::Acknowledge { ids } => {
-                if ids.len() > 256 {
+            Command::OtlpBatch { limit } => {
+                if limit == 0 || limit > 256 {
+                    return Err(failure());
+                }
+                let events = self.queue.batch(limit, now_ms).map_err(|_| failure())?;
+                let requests =
+                    telemetry_transport::otlp_requests(&events).map_err(|_| failure())?;
+                return serde_json::to_value(requests).map_err(|_| failure());
+            }
+            Command::Acknowledge { ids, rejected } => {
+                if ids.len() > 256
+                    || rejected > ids.len()
+                    || ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len()
+                {
                     return Err(failure());
                 }
                 self.queue.acknowledge(&ids).map_err(|_| failure())?;
+                self.dropped = self.dropped.saturating_add(rejected as u64);
             }
             Command::Diagnostics {} => {
                 return Ok(
@@ -186,7 +218,8 @@ impl WasmTelemetry {
                 return Ok(json!({
                     "binding":"wasm", "memory_queue":true, "sqlite":false, "indexeddb":false,
                     "lifecycle":false, "workflows":false, "screens":false, "process_metrics":false,
-                    "crash_recovery":false, "browser_adapter_transport":true
+                    "crash_recovery":false, "browser_adapter_transport":true,
+                    "otlp_http_json":true, "legacy_json":true
                 }))
             }
             Command::Shutdown {} => {
@@ -234,8 +267,13 @@ enum Command {
     Batch {
         limit: usize,
     },
+    OtlpBatch {
+        limit: usize,
+    },
     Acknowledge {
         ids: Vec<String>,
+        #[serde(default)]
+        rejected: usize,
     },
     Diagnostics {},
     Capabilities {},

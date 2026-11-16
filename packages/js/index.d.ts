@@ -1,11 +1,15 @@
 export type Category = 'essential_operations' | 'diagnostics' | 'performance' | 'usage_aggregate' | 'usage_session' | 'extended_support';
 export type ActionResult = 'success' | 'failure' | 'cancelled';
 export type WorkflowOutcome = 'complete' | 'cancelled' | 'failed' | 'timeout';
+export type ExportProtocol = 'otlp_http_json' | 'legacy_json';
 export interface QueueConfig { max_events?: number; max_bytes?: number; ttl_ms?: number; per_category_max_events?: number; }
 export interface Limits { max_properties?: number; max_string_bytes?: number; max_event_bytes?: number; }
 export interface Config {
   app_id: string; app_version: string;
   endpoint?: string | null; ingestion_token?: string | null;
+  export_protocol?: ExportProtocol;
+  otlp_headers?: Record<string, string>;
+  allow_insecure_loopback?: boolean;
   consent?: Partial<Record<Category, boolean>>;
   essential_operations_reviewed?: boolean;
   queue?: QueueConfig; limits?: Limits;

@@ -45,4 +45,19 @@ try {
   await disk.setConsent('usage_aggregate', false);
   await disk.shutdown();
 } finally { await rm(temp, { recursive: true, force: true }); }
+
+// The common native config accepts collector settings without changing N-API.
+const clickstack = await createTelemetry({
+  app_id: 'test.node.clickstack', app_version: '1.0.0',
+  endpoint: 'https://example.invalid',
+  otlp_headers: { authorization: 'public-clickstack-key' },
+});
+await clickstack.shutdown();
+const legacy = await createTelemetry({ app_id: 'test.node.legacy', app_version: '1.0.0', export_protocol: 'legacy_json' });
+await legacy.shutdown();
+await assert.rejects(createTelemetry({ app_id: 'test.node.invalid', app_version: '1.0.0', export_protocol: 'otlp_grpc' }));
+await assert.rejects(createTelemetry({
+  app_id: 'test.node.auth', app_version: '1.0.0', endpoint: 'https://example.invalid',
+  ingestion_token: 'public-token', otlp_headers: { authorization: 'public-key' },
+}));
 console.log('Node native smoke passed');

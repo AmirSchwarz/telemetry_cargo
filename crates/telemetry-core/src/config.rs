@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 use telemetry_privacy::Consent;
 use telemetry_queue::QueueConfig;
 use telemetry_schema::Limits;
+use telemetry_transport::ExportProtocol;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -11,6 +12,9 @@ pub struct Config {
     pub app_version: String,
     pub endpoint: Option<String>,
     pub ingestion_token: Option<String>,
+    pub export_protocol: ExportProtocol,
+    pub otlp_headers: BTreeMap<String, String>,
+    pub allow_insecure_loopback: bool,
     pub consent: Consent,
     pub essential_operations_reviewed: bool,
     pub queue: QueueConfig,
@@ -38,6 +42,9 @@ impl Default for Config {
             app_version: String::new(),
             endpoint: None,
             ingestion_token: None,
+            export_protocol: ExportProtocol::default(),
+            otlp_headers: BTreeMap::new(),
+            allow_insecure_loopback: false,
             consent: Consent::default(),
             essential_operations_reviewed: false,
             queue: QueueConfig::default(),
@@ -56,6 +63,9 @@ impl fmt::Debug for Config {
             .field("app_id", &self.app_id)
             .field("app_version", &self.app_version)
             .field("endpoint_configured", &self.endpoint.is_some())
+            .field("export_protocol", &self.export_protocol)
+            .field("otlp_headers_configured", &!self.otlp_headers.is_empty())
+            .field("allow_insecure_loopback", &self.allow_insecure_loopback)
             .field(
                 "ingestion_token",
                 &self.ingestion_token.as_ref().map(|_| "[redacted]"),

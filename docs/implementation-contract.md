@@ -1,5 +1,7 @@
 # Implementation contract (0.1)
 
+The original custom HTTP transport details below are superseded by the [OTLP implementation contract](otlp-implementation-contract.md). OTLP/HTTP JSON is now the default exporter; the original batch format requires explicit `legacy_json` configuration. Core privacy and lifecycle rules remain in effect.
+
 This file fixes the internal interfaces for the initial implementation of the design. The original design remains the longer-term roadmap. Source is licensed under Apache License 2.0; packages are unpublished pending namespace and release decisions.
 
 ## Shared schema

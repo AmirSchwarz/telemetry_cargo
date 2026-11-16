@@ -219,7 +219,7 @@ impl Transport for HttpTransport {
     }
 }
 
-fn parse_retry_after(value: &str) -> Option<Duration> {
+pub(super) fn parse_retry_after(value: &str) -> Option<Duration> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

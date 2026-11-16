@@ -16,6 +16,10 @@ Version 0.1 is an unpublished, source-built SDK. Capability discovery describes 
 
 Native bindings delegate event validation, consent, error redaction and bounded queue handling to Rust. The engine supports typed actions and errors, counters, spans, screen entry/leave, workflows, explicit lifecycle events, diagnostics and manual flush/shutdown. It does not infer input content or install global keyboard hooks.
 
+OTLP/HTTP JSON is the default network protocol. Native and browser exporters use the shared Rust mapping for logs, delta metrics and standalone traces. They can target an existing OpenTelemetry Collector, including the collector used by ClickStack. The previous custom batch API remains available only through `export_protocol: "legacy_json"`. See [setup and signal mapping](opentelemetry.md).
+
+This is OTLP export compatibility. It does not install OpenTelemetry auto-instrumentation, implement the full OpenTelemetry SDK API, propagate W3C trace context, or create parent/child traces across services. It does not deploy a collector or ClickStack instance.
+
 The native `aggregates()` API exposes bounded local counter and span snapshots. Counter and span maps each allow 256 names and are cleared when the corresponding consent is withdrawn. This local API does not complete the design's later server analytics work.
 
 Rust, Python and Go APIs can perform synchronous SQLite I/O. Node offloads all native calls; Dart offloads them to an isolate. Framework integration should account for these calling-thread differences.
@@ -28,7 +32,7 @@ The `telemetry-platform` crate's optional `process-metrics` feature reads Linux 
 
 The design's full definition of done includes services and production validation beyond a client library. This repository does not establish those milestones:
 
-- A deployed ingestion gateway, ClickHouse storage, ClickStack/OTLP mapping, retention/deletion services, dashboards or read-only MCP.
+- A deployed collector or ClickStack instance, ClickHouse storage, retention/deletion services, dashboards or read-only MCP.
 - Signed releases, published packages, complete OS/architecture build matrices, mobile store distribution or measured battery/performance budgets.
 - Native crash markers, partial-session restoration after abnormal exit, minidumps or encrypted persistence.
 - Pure-Go collection without cgo, automatic Flutter plugin instrumentation or browser IndexedDB persistence.

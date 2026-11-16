@@ -1,6 +1,6 @@
 # Integration guide
 
-Run build commands from the repository root unless a section says otherwise. Examples omit an endpoint so they can run without a server. Categories must be enabled explicitly. For remote delivery, set the full HTTPS batch endpoint and provide a public ingestion token if your gateway requires one.
+Run build commands from the repository root unless a section says otherwise. Examples omit an endpoint so they can run without a server. Categories must be enabled explicitly. For remote delivery, set the base URL of an existing OpenTelemetry Collector or ClickStack collector. The default protocol is `otlp_http_json`; see [OpenTelemetry and ClickStack setup](opentelemetry.md) for endpoints, authentication, local testing and migration from the legacy JSON protocol.
 
 ## Rust
 
@@ -10,7 +10,7 @@ See the root README for the local Cargo dependency. The runnable sample is:
 cargo run -p telemetry-rust --example basic
 ```
 
-The sample reads `TELEMETRY_ENDPOINT` and `TELEMETRY_INGESTION_TOKEN`. Without an endpoint it leaves its demonstration events in the in-memory queue until process exit.
+The sample reads `TELEMETRY_ENDPOINT` and `TELEMETRY_INGESTION_TOKEN`. Set the endpoint to a collector base URL, such as `https://collector.example.com`. The token is sent as Bearer authentication. Without an endpoint the sample leaves its demonstration events in the in-memory queue until process exit. These environment variables are read explicitly by the sample; the SDK does not read exporter environment variables implicitly.
 
 To measure a span:
 
@@ -214,14 +214,14 @@ import { createBrowserTelemetry } from './packages/js/browser.mjs';
 const sdk = await createBrowserTelemetry({
   app_id: 'example.browser',
   app_version: '1.0.0',
-  endpoint: 'https://telemetry.example.com/v1/telemetry/batches',
+  endpoint: 'https://collector.example.com',
 });
 sdk.setConsent('usage_aggregate', true);
 sdk.action('search.submit', { result: 'success' });
 await sdk.flush(5000);
 ```
 
-The ingestion gateway must allow the application's origin and requested headers through CORS. The adapter uses `fetch` without credentials or referrer and rejects redirects. Browser consent changes are synchronous; export is asynchronous and explicit. There is no periodic background upload, IndexedDB persistence, page-exit delivery guarantee, or automatic Page Visibility/focus instrumentation. Session telemetry, screens, workflows and lifecycle collection are unsupported and must not be enabled.
+The collector or its HTTPS proxy must allow the application's origin and requested headers through CORS. OTLP uses `/v1/logs`, `/v1/metrics` and `/v1/traces`; only signals present in the queue are sent. The adapter uses `fetch` without credentials or referrer and rejects redirects. Browser consent changes are synchronous; export is asynchronous and explicit. There is no periodic background upload, IndexedDB persistence, page-exit delivery guarantee, or automatic Page Visibility/focus instrumentation. Session telemetry, screens, workflows and lifecycle collection are unsupported and must not be enabled.
 
 After building WASM, the test below exercises the actual WASM engine in Node with a mocked HTTPS `fetch`. It does not constitute a browser or DOM test:
 
@@ -229,14 +229,10 @@ After building WASM, the test below exercises the actual WASM engine in Node wit
 node packages/js/test/browser-smoke.mjs
 ```
 
-## Gateway contract
+## Export and delivery
 
-The native HTTP exporter sends:
+The default exporter uses standard OTLP/HTTP JSON requests and responses, including partial-success handling. Successfully completed signal requests are removed independently, so a failed trace request does not replay an already accepted log request. Definitive OTLP rejections are reported and consumed without retry. Retryable failures retain the affected events subject to queue limits and TTL. See [delivery semantics](opentelemetry.md#delivery-and-retries).
 
-```json
-{"schema_version":1,"events":[...]}
-```
+Existing custom receivers can select `export_protocol: "legacy_json"` and retain the full `https://…/v1/telemetry/batches` endpoint. That mode sends `{"schema_version":1,"events":[...]}` and uses its original whole-batch acknowledgment behavior; it is not OTLP.
 
-to `POST /v1/telemetry/batches`. The gateway must validate each envelope, deduplicate event IDs and acknowledge a complete batch only after accepting it. Only 2xx acknowledges delivery; response bodies are not used as application commands. A transport error leaves pending events subject to queue limits and TTL.
-
-`flush` is a delivery attempt with a deadline, not proof of durable server storage. A successful acknowledgement means the configured transport accepted the batch. Application shutdown, browser exit and mobile suspension cannot guarantee delivery.
+`flush` is a delivery attempt with a deadline, not proof of durable database storage. A successful acknowledgment means the configured collector or transport accepted the records. Application shutdown, browser exit and mobile suspension cannot guarantee delivery.

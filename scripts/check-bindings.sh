@@ -30,7 +30,7 @@ python3 tests/native_conformance.py "$telemetry_library"
 
 telemetry_go="${TELEMETRY_GO:-go}"
 telemetry_dart="${TELEMETRY_DART:-dart}"
-(cd packages/go && CGO_ENABLED=1 "$telemetry_go" test -race ./...)
+(cd packages/go && CGO_ENABLED=1 "$telemetry_go" test -race -count=1 ./...)
 (cd packages/go && CGO_ENABLED=0 "$telemetry_go" test ./...)
 "$telemetry_dart" --suppress-analytics analyze packages/flutter/lib packages/flutter/example
 "$telemetry_dart" --suppress-analytics run packages/flutter/example/smoke.dart "$telemetry_library"
