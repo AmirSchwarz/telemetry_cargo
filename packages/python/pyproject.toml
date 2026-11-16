@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "telemetry-sdk-local"
+version = "0.1.0"
+license = { text = "Apache-2.0" }
+description = "Privacy-gated telemetry backed by the shared Rust engine"
+requires-python = ">=3.9"
+
+[tool.maturin]
+manifest-path = "../../crates/telemetry-python/Cargo.toml"
+python-source = "."
+module-name = "telemetry._native"
+features = ["extension-module"]

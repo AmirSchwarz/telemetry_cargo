@@ -1,0 +1,18 @@
+[package]
+name = "telemetry-node"
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+telemetry-core = { path = "../telemetry-core", features = ["http", "sqlite"] }
+serde_json.workspace = true
+napi = { workspace = true, features = ["napi6"] }
+napi-derive.workspace = true
+
+[build-dependencies]
+napi-build.workspace = true

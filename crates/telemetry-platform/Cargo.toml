@@ -1,0 +1,13 @@
+[package]
+name = "telemetry-platform"
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[features]
+default = []
+process-metrics = []
+
+[dependencies]
+serde.workspace = true

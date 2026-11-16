@@ -1,0 +1,15 @@
+{
+  "description": "Shared offline binding conformance; every optional category starts disabled",
+  "config": { "app_id": "conformance.app", "app_version": "1.0.0", "flush_interval_ms": 60000 },
+  "commands": [
+    { "op": "action", "id": "search.submit", "result": "success" },
+    { "op": "diagnostics" },
+    { "op": "set_consent", "category": "usage_aggregate", "enabled": true },
+    { "op": "action", "id": "search.submit", "result": "success" },
+    { "op": "increment", "name": "documents.imported", "amount": 3 },
+    { "op": "diagnostics" },
+    { "op": "set_consent", "category": "usage_aggregate", "enabled": false },
+    { "op": "diagnostics" }
+  ],
+  "expected_queue_depths": [0, 2, 0]
+}

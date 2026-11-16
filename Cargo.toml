@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+default-members = ["crates/telemetry-rust", "crates/telemetry-ffi"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.26", features = ["v4", "serde"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "gzip"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+pyo3 = { version = "0.23", features = ["abi3-py39"] }
+napi = { version = "2", default-features = false, features = ["napi6"] }
+napi-derive = "2"
+napi-build = "2"
+wasm-bindgen = "=0.2.129"
+telemetry-schema = { path = "crates/telemetry-schema" }
+telemetry-privacy = { path = "crates/telemetry-privacy" }
+telemetry-queue = { path = "crates/telemetry-queue", default-features = false }
+telemetry-transport = { path = "crates/telemetry-transport", default-features = false }
+telemetry-platform = { path = "crates/telemetry-platform" }
+telemetry-core = { path = "crates/telemetry-core", default-features = false }
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"

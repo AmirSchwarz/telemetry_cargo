@@ -1,0 +1,15 @@
+{
+  "name": "@telemetry-sdk/local",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Privacy-gated telemetry backed by one Rust engine",
+  "exports": {
+    ".": { "types": "./index.d.ts", "import": "./index.mjs" },
+    "./browser": { "types": "./browser.d.ts", "import": "./browser.mjs" }
+  },
+  "scripts": { "test": "node test/smoke.mjs", "build:native": "node build-native.mjs" },
+  "engines": { "node": ">=18" },
+  "files": ["*.mjs", "*.d.ts", "native/", "wasm/"]
+}

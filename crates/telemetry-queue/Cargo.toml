@@ -1,0 +1,16 @@
+[package]
+name = "telemetry-queue"
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[features]
+default = []
+sqlite = ["dep:rusqlite"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+telemetry-schema = { path = "../telemetry-schema" }
+rusqlite = { workspace = true, optional = true }

@@ -1,0 +1,12 @@
+[
+  {"name":"action","category":"usage_aggregate","properties":{"id":"identifier","result":{"enum":["success","failure","cancelled"]}}},
+  {"name":"error","category":"diagnostics","properties":{"code":"identifier","message":"redacted_text"}},
+  {"name":"metric.increment","category":"usage_aggregate","properties":{"name":"identifier","amount":"number"}},
+  {"name":"span","category":"performance","properties":{"name":"identifier","duration_ms":"number"}},
+  {"name":"screen.enter","category":"usage_session","properties":{"id":"identifier"}},
+  {"name":"screen.leave","category":"usage_session","properties":{"id":"identifier","duration_ms":"number"}},
+  {"name":"workflow.start","category":"usage_session","properties":{"name":"identifier"}},
+  {"name":"workflow.step","category":"usage_session","properties":{"step":"identifier"}},
+  {"name":"workflow.end","category":"usage_session","properties":{"outcome":{"enum":["complete","cancelled","failed","timeout"]},"duration_ms":"number"}},
+  {"name":"lifecycle.checkpoint","category":"usage_session","properties":{"running_ms":"number","foreground_visible_ms":"number","focused_ms":"number","interaction_active_ms":"number","idle_ms":"number"}}
+]

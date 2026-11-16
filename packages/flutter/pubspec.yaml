@@ -1,0 +1,6 @@
+name: telemetry_native
+description: Native Dart and Flutter telemetry using the shared Rust engine.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.4.0 <4.0.0'

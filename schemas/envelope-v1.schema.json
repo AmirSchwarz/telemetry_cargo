@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:telemetry:envelope:1",
+  "title": "Telemetry envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","event_id","app_id","app_version","platform","sdk_version","category","event_name","occurred_at","properties"],
+  "properties": {
+    "schema_version": {"const":1},
+    "event_id": {"$ref":"#/$defs/randomId"},
+    "app_id": {"$ref":"#/$defs/identifier"},
+    "app_version": {"$ref":"#/$defs/version"},
+    "platform": {"$ref":"#/$defs/identifier"},
+    "sdk_version": {"$ref":"#/$defs/version"},
+    "category": {"enum":["essential_operations","diagnostics","performance","usage_aggregate","usage_session","extended_support"]},
+    "event_name": {"$ref":"#/$defs/identifier"},
+    "occurred_at": {"type":"integer","minimum":0},
+    "session_id": {"$ref":"#/$defs/randomId"},
+    "workflow_id": {"$ref":"#/$defs/randomId"},
+    "properties": {"type":"object","maxProperties":32,"propertyNames":{"$ref":"#/$defs/identifier"},"additionalProperties":{"type":["string","number","boolean"],"maxLength":128}}
+  },
+  "dependentSchemas": {
+    "session_id": {"properties":{"category":{"const":"usage_session"}}},
+    "workflow_id": {"properties":{"category":{"const":"usage_session"}}}
+  },
+  "$defs": {
+    "randomId": {"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"},
+    "identifier": {"type":"string","minLength":1,"maxLength":96,"pattern":"^[a-zA-Z0-9_.-]+$"},
+    "version": {"type":"string","minLength":1,"maxLength":128,"pattern":"^[a-zA-Z0-9_.+-]+$"}
+  },
+  "$comment": "Apply registry-v1.json event/category/property rules in addition to this structural envelope. Rust validates UTF-8 byte budgets and finite numbers. Property rules are optional unless an API method requires them."
+}

@@ -1,0 +1,19 @@
+[package]
+name = "telemetry-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = ["http", "sqlite"]
+http = ["telemetry-core/http"]
+sqlite = ["telemetry-core/sqlite"]
+
+[dependencies]
+telemetry-core = { workspace = true }
+serde_json.workspace = true

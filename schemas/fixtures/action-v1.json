@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "event_id": "aeaf5271-4b59-48c8-8dc9-a4b0812984c8",
+  "app_id": "example.desktop",
+  "app_version": "1.0.0",
+  "platform": "linux",
+  "sdk_version": "0.1.0",
+  "category": "usage_aggregate",
+  "event_name": "action",
+  "occurred_at": 1700000000000,
+  "properties": {"id":"search.submit", "result":"success"}
+}

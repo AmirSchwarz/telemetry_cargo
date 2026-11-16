@@ -1,0 +1,10 @@
+[package]
+name = "telemetry-privacy"
+version.workspace = true
+edition.workspace = true
+publish = false
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+telemetry-schema = { path = "../telemetry-schema" }
