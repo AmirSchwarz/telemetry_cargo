@@ -2,6 +2,28 @@
 
 Run build commands from the repository root unless a section says otherwise. Examples omit an endpoint so they can run without a server. Categories must be enabled explicitly. For remote delivery, set the base URL of an existing OpenTelemetry Collector or ClickStack collector. The default protocol is `otlp_http_json`; see [OpenTelemetry and ClickStack setup](opentelemetry.md) for endpoints, authentication, local testing and migration from the legacy JSON protocol.
 
+## Configure a collector URL
+
+Use the collector's OTLP/HTTP base URL in the configuration passed to your
+language's initializer:
+
+```json
+{
+  "app_id": "my.app",
+  "app_version": "1.0.0",
+  "endpoint": "https://collector.example.com"
+}
+```
+
+The SDK appends `/v1/logs`, `/v1/metrics` and `/v1/traces` automatically, so an
+existing collector can receive data without a custom API. Add
+`otlp_headers.authorization` for a ClickStack ingestion key, or use
+`ingestion_token` when the collector expects Bearer authentication. Enable
+collection categories through the application's consent controls; they remain
+off even when an endpoint is configured. See the
+[URL setup checklist](opentelemetry.md#url-setup-checklist) and
+[authentication examples](opentelemetry.md#clickstack-authentication).
+
 ## Rust
 
 See the root README for the local Cargo dependency. The runnable sample is:

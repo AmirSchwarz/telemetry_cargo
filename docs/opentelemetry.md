@@ -10,6 +10,44 @@ The default is `export_protocol: "otlp_http_json"`. OTLP/gRPC, binary protobuf,
 auto-instrumentation and distributed context propagation are not implemented.
 The SDK's consent, redaction and bounded queues remain in front of export.
 
+## URL setup checklist
+
+For an existing collector, the application only needs its OTLP/HTTP base URL,
+any authentication required by that collector, and explicit consent settings.
+The SDK does not discover, create or start a backend automatically.
+
+1. Obtain the running collector's OTLP/HTTP base URL. For example,
+   `https://collector.example.com` or `https://collector.example.com/otlp`.
+2. Assign it to `endpoint`. Leave `export_protocol` omitted to use the default
+   `otlp_http_json`; the SDK appends the signal paths automatically.
+3. Supply authentication if required. ClickStack ingestion keys use
+   `otlp_headers.authorization`; `ingestion_token` adds a Bearer prefix.
+4. Initialize the SDK and enable the categories permitted by the application's
+   consent settings. The URL alone does not enable telemetry.
+
+Minimal shared JSON configuration:
+
+```json
+{
+  "app_id": "my.app",
+  "app_version": "1.0.0",
+  "endpoint": "https://collector.example.com"
+}
+```
+
+This is sufficient exporter configuration for a collector that does not require
+authentication. It does not enable any collection category. Use the
+[ClickStack authentication example](#clickstack-authentication) when an
+ingestion key is required.
+
+If data is not appearing, check the collector URL and authentication, the
+enabled consent categories, and errors returned by `flush`. A browser also
+needs the collector's CORS configuration to permit the application's origin
+and headers. For a local HTTP collector, follow the explicit
+[loopback setup](#local-collector-testing). Omitting `endpoint` keeps enabled
+telemetry local; flushing a nonempty queue then reports that no exporter is
+configured.
+
 ## Connect an application
 
 For a collector exposed through HTTPS:
@@ -23,6 +61,7 @@ config.endpoint = Some("https://collector.example.com".into());
 // If the collector requires Bearer authentication:
 config.ingestion_token = std::env::var("TELEMETRY_INGESTION_TOKEN").ok();
 let sdk = telemetry::init(config)?;
+// Enable only the categories allowed by the application's consent settings.
 sdk.set_consent(Category::UsageAggregate, true)?;
 sdk.set_consent(Category::Diagnostics, true)?;
 sdk.set_consent(Category::Performance, true)?;

@@ -4,6 +4,24 @@ A Rust telemetry engine with language bindings for applications. Each SDK instan
 
 The default exporter sends standard **OTLP/HTTP JSON** to an existing OpenTelemetry Collector or ClickStack collector. You configure the collector's base URL; no custom telemetry API is required. The SDK remains source-built and unpublished. See [OpenTelemetry and ClickStack setup](docs/opentelemetry.md) and the [support matrix](docs/support-matrix.md).
 
+## Connect using a URL
+
+Set `endpoint` to the OTLP/HTTP base URL of your running collector:
+
+```json
+{
+  "app_id": "my.app",
+  "app_version": "1.0.0",
+  "endpoint": "https://collector.example.com"
+}
+```
+
+The default exporter automatically posts to `/v1/logs`, `/v1/metrics` and `/v1/traces` as needed. You do not need to implement a custom endpoint. The same configuration fields are available in every language binding; Go exposes typed fields.
+
+If your ClickStack collector requires an ingestion key, add `otlp_headers` with `authorization` set to that key. For Bearer authentication, use `ingestion_token` instead. See the [complete authentication examples](docs/opentelemetry.md#clickstack-authentication).
+
+Setting a URL does not enable collection: all consent categories remain off until the application enables them after obtaining permission. Without an endpoint, enabled telemetry stays in the local queue. See the [URL setup checklist](docs/opentelemetry.md#url-setup-checklist) for local testing and connection troubleshooting.
+
 ## Use from Rust
 
 Add the crate from GitHub to an application's `Cargo.toml`:
